@@ -1,15 +1,16 @@
 from datetime import timedelta, datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 import random
 import string
+import os
 
+# Database & Security Imports
 from app.database import get_db
 from app.core import security
 from app.core.config import settings
 from app.crud import crud_user
-from app.models.user import User
 from app.schemas.token import Token
 from app.schemas.user import (
     UserCreate, 
@@ -20,9 +21,39 @@ from app.schemas.user import (
     ChangePasswordRequest
 )
 
+# Email Logic Import (Try/Except allows code to run even if you haven't created the email util yet)
+try:
+    from app.core.email_utils import send_otp_email
+except ImportError:
+    send_otp_email = None
+
 router = APIRouter()
 
-# --- 1. SIGN UP ---
+# --- HELPER: OTP SENDER ---
+def deliver_otp(email: str, otp: str):
+    """
+    Attempts to send OTP via Email. 
+    Falls back to Console Print if Email fails or isn't configured.
+    """
+    email_sent = False
+    
+    # Try sending real email if utility exists and config is present
+    if send_otp_email and os.getenv("EMAIL_PASSWORD"):
+        print(f"📧 Attempting to send email to {email}...")
+        email_sent = send_otp_email(email, otp)
+    
+    # Fallback to Console (For Development/Testing)
+    if not email_sent:
+        print(f"\n" + "="*50)
+        print(f"⚠️  EMAIL SIMULATION (SMTP not configured or failed)")
+        print(f"📨  To: {email}")
+        print(f"🔑  OTP CODE: {otp}")
+        print(f"="*50 + "\n")
+
+
+# ==========================================
+# 1. SIGN UP
+# ==========================================
 @router.post("/signup", response_model=UserSchema)
 def register_user(user: UserCreate, db: Session = Depends(get_db)):
     """
@@ -38,12 +69,17 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     return new_user
 
 
-# --- 2. LOGIN (Form Data - For Swagger UI) ---
+# ==========================================
+# 2. LOGIN (Swagger UI / Form Data)
+# ==========================================
 @router.post("/login", response_model=Token)
 def login_access_token(
     db: Session = Depends(get_db),
     form_data: OAuth2PasswordRequestForm = Depends()
 ):
+    """
+    Standard OAuth2 login for Swagger UI documentation.
+    """
     user = crud_user.authenticate_user(db, email=form_data.username, password=form_data.password)
     if not user:
         raise HTTPException(
@@ -52,6 +88,9 @@ def login_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    if not user.is_active:
+         raise HTTPException(status_code=400, detail="Inactive user")
+
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = security.create_access_token(
         subject=user.id, expires_delta=access_token_expires
@@ -59,15 +98,20 @@ def login_access_token(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-# --- 2b. LOGIN (JSON Body - For Flutter App) ---
+# ==========================================
+# 3. LOGIN (JSON / Flutter App)
+# ==========================================
 class LoginRequest(UserCreate):
-    pass # Re-using UserCreate because it has email & password
+    pass 
 
 @router.post("/login-json", response_model=Token)
 def login_json(
     login_data: LoginRequest,
     db: Session = Depends(get_db)
 ):
+    """
+    JSON-based login endpoint for Mobile Apps.
+    """
     user = crud_user.authenticate_user(db, email=login_data.email, password=login_data.password)
     if not user:
         raise HTTPException(
@@ -75,6 +119,9 @@ def login_json(
             detail="Incorrect email or password",
         )
     
+    if not user.is_active:
+         raise HTTPException(status_code=400, detail="Inactive user")
+
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = security.create_access_token(
         subject=user.id, expires_delta=access_token_expires
@@ -82,24 +129,27 @@ def login_json(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-# --- 3. FORGOT PASSWORD (Generate OTP) ---
+# ==========================================
+# 4. FORGOT PASSWORD (OTP Generation)
+# ==========================================
 @router.post("/forgot-password")
 def forgot_password(
     request: ForgotPasswordRequest,
     db: Session = Depends(get_db)
 ):
     """
-    Generates a 6-digit OTP and 'sends' it (prints to console for testing).
+    Generates a 6-digit OTP and sends it via Email (or Console).
     """
     user = crud_user.get_user_by_email(db, email=request.email)
+    
+    # Security: Always return success to prevent email enumeration
     if not user:
-        # We return 200 even if user doesn't exist to prevent email enumeration attacks
         return {"message": "If this email exists, an OTP has been sent."}
 
     # Generate 6-digit OTP
     otp = "".join(random.choices(string.digits, k=6))
     
-    # Set expiration (e.g., 10 minutes from now)
+    # Set expiration (10 minutes from now)
     expiration = datetime.utcnow() + timedelta(minutes=10)
 
     # Save to DB
@@ -107,16 +157,15 @@ def forgot_password(
     user.reset_otp_expires = expiration
     db.commit()
 
-    # --- MOCK EMAIL SENDING ---
-    print(f"========================================")
-    print(f"PASSWORD RESET OTP FOR {user.email}: {otp}")
-    print(f"========================================")
-    # In production, use an email service here (e.g., SendGrid, AWS SES)
+    # Send the OTP
+    deliver_otp(user.email, otp)
 
     return {"message": "OTP sent successfully"}
 
 
-# --- 4. VERIFY OTP ---
+# ==========================================
+# 5. VERIFY OTP
+# ==========================================
 @router.post("/verify-otp")
 def verify_otp(
     request: VerifyOTPRequest,
@@ -129,23 +178,27 @@ def verify_otp(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # Check matches
     if not user.reset_otp or user.reset_otp != request.otp:
         raise HTTPException(status_code=400, detail="Invalid OTP")
 
+    # Check expiration
     if user.reset_otp_expires and datetime.utcnow() > user.reset_otp_expires:
         raise HTTPException(status_code=400, detail="OTP has expired")
 
     return {"message": "OTP verified successfully"}
 
 
-# --- 5. RESET PASSWORD ---
+# ==========================================
+# 6. RESET PASSWORD (Unauthenticated flow)
+# ==========================================
 @router.post("/reset-password")
 def reset_password(
     request: ResetPasswordRequest,
     db: Session = Depends(get_db)
 ):
     """
-    Sets a new password using the OTP.
+    Sets a new password using a valid OTP.
     """
     if request.new_password != request.confirm_password:
         raise HTTPException(status_code=400, detail="Passwords do not match")
@@ -154,7 +207,7 @@ def reset_password(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Verify OTP again to be safe
+    # Verify OTP again (Critical Security Step)
     if user.reset_otp != request.otp:
         raise HTTPException(status_code=400, detail="Invalid OTP")
     
@@ -164,7 +217,7 @@ def reset_password(
     # Update Password
     user.hashed_password = security.get_password_hash(request.new_password)
     
-    # Clear OTP
+    # Clear OTP so it can't be reused
     user.reset_otp = None
     user.reset_otp_expires = None
     
@@ -173,7 +226,9 @@ def reset_password(
     return {"message": "Password reset successfully. Please login."}
 
 
-# --- 6. CHANGE PASSWORD (Authenticated) ---
+# ==========================================
+# 7. CHANGE PASSWORD (Authenticated flow)
+# ==========================================
 @router.post("/change-password")
 def change_password(
     request: ChangePasswordRequest,
@@ -181,7 +236,7 @@ def change_password(
     current_user_id: int = Depends(security.get_current_user)
 ):
     """
-    Allows a logged-in user to change their password.
+    Allows a logged-in user to change their password from settings.
     """
     user = crud_user.get_user_by_id(db, user_id=current_user_id)
     if not user:
@@ -198,7 +253,9 @@ def change_password(
     return {"message": "Password changed successfully"}
 
 
-# --- 7. GET CURRENT USER ---
+# ==========================================
+# 8. GET CURRENT USER PROFILE
+# ==========================================
 @router.get("/me", response_model=UserSchema)
 def read_users_me(
     db: Session = Depends(get_db),
