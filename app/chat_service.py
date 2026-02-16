@@ -3,6 +3,7 @@ import openai
 from dotenv import load_dotenv
 from typing import Dict, List
 from fastapi import UploadFile
+from openai import OpenAI
 
 from .prompts import CHEF_AVATAR_PROMPT
 from .models import ChatMessage
@@ -10,8 +11,12 @@ from .websocket_manager import manager
 
 load_dotenv()
 
-from openai import OpenAI
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Initialize OpenAI client with only API key
+api_key = os.getenv("OPENAI_API_KEY")
+if api_key:
+    client = OpenAI(api_key=api_key)
+else:
+    raise ValueError("OPENAI_API_KEY environment variable is not set")
 
 conversation_histories: Dict[str, List[Dict[str, str]]] = {}
 
