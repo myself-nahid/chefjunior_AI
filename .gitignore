@@ -58,3 +58,6 @@ __pycache__/
 # Database files
 *.db
 .db
+
+# Ignore test_client.py file
+test_client.py
