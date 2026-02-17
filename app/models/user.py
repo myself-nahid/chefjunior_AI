@@ -32,3 +32,5 @@ class User(Base):
 
     # Favorites Relationship
     favorite_recipes = relationship("Recipe", secondary=favorites_table, back_populates="favorited_by")
+    # Game Progress Relationship
+    game_progress = relationship("app.models.game.UserGameProgress", back_populates="user")
