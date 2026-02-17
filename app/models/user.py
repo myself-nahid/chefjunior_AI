@@ -20,6 +20,9 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
+
+    avatar_url = Column(String, nullable=True) # Stores path to image
+    language = Column(String, default="en")    # Stores "en", "es", etc.
     
     # Analytics
     recipes_tried = Column(Integer, default=0)
