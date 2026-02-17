@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Text, ForeignKey, Table, Enum
 from sqlalchemy.orm import relationship
 from app.database import Base
 from datetime import datetime
+from app.models.user import favorites_table
 
 class Recipe(Base):
     __tablename__ = "recipes"
@@ -21,6 +22,7 @@ class Recipe(Base):
 
     # Relationship to RecipeIngredient
     ingredients = relationship("RecipeIngredient", back_populates="recipe", cascade="all, delete-orphan")
+    favorited_by = relationship("User", secondary=favorites_table, back_populates="favorite_recipes")
 
 class RecipeIngredient(Base):
     """Association table to store quantity of an ingredient in a recipe"""

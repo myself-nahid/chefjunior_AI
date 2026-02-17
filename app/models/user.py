@@ -1,6 +1,15 @@
-from sqlalchemy import Boolean, Column, Integer, String, DateTime
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, Table, ForeignKey
+from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.database import Base
+
+# Association Table for Favorites
+favorites_table = Table(
+    "favorites",
+    Base.metadata,
+    Column("user_id", Integer, ForeignKey("users.id"), primary_key=True),
+    Column("recipe_id", Integer, ForeignKey("recipes.id"), primary_key=True),
+)
 
 class User(Base):
     __tablename__ = "users"
@@ -20,3 +29,6 @@ class User(Base):
     # Password Reset Fields
     reset_otp = Column(String, nullable=True) # Stores the 6-digit code
     reset_otp_expires = Column(DateTime, nullable=True)
+
+    # Favorites Relationship
+    favorite_recipes = relationship("Recipe", secondary=favorites_table, back_populates="favorited_by")
