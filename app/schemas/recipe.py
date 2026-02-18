@@ -48,3 +48,15 @@ class RecipeOut(RecipeBase):
 
     class Config:
         from_attributes = True
+
+class RecipeExploreOut(BaseModel):
+    id: int
+    title: str
+    difficulty: str
+    cooking_time: str
+    category: Optional[str] = "Fast Food"
+    image_url: Optional[str] = None
+    is_favorite: bool = False
+
+    class Config:
+        from_attributes = True

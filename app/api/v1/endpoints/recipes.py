@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.recipe import RecipeOut, RecipeCreate  # Added RecipeCreate
+from app.schemas.recipe import RecipeOut, RecipeCreate, RecipeExploreOut
 from app.crud import crud_recipe
 from app.core import security
 from app.models.user import User
@@ -34,6 +34,41 @@ def read_recipes(
         
     return results
 
+@router.get("/explore", response_model=List[RecipeExploreOut])
+def explore_recipes(
+    skip: int = 0, 
+    limit: int = 100, 
+    q: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(security.get_current_user)
+):
+    """
+    Get a simplified list of recipes for the Home/Explore feed.
+    Excludes ingredients and heavy details.
+    """
+    # 1. Fetch Recipes
+    recipes = crud_recipe.get_recipes(db, skip=skip, limit=limit, search=q)
+    
+    # 2. Get User Favorites (to mark is_favorite=True/False)
+    user = db.query(User).filter(User.id == current_user_id).first()
+    user_fav_ids = [r.id for r in user.favorite_recipes] if user else []
+
+    # 3. Map to the simplified schema
+    results = []
+    for r in recipes:
+        # Create the simplified object
+        r_out = RecipeExploreOut(
+            id=r.id,
+            title=r.title,
+            difficulty=r.difficulty,
+            cooking_time=r.cooking_time,
+            # category=r.category,
+            image_url=r.image_url,
+            is_favorite=(r.id in user_fav_ids) 
+        )
+        results.append(r_out)
+        
+    return results
 
 # 2. CREATE RECIPE (Restored Endpoint)
 @router.post("/", response_model=RecipeOut)

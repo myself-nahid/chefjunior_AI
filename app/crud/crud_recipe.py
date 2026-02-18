@@ -33,7 +33,7 @@ def create_recipe(db: Session, recipe: RecipeCreate):
         difficulty=recipe.difficulty,
         cooking_time=recipe.cooking_time,
         servings=recipe.servings,
-        category=recipe.category,
+        # category=recipe.category,
         image_url=recipe.image_url,
         video_url=recipe.video_url
     )

@@ -61,3 +61,6 @@ __pycache__/
 
 # Ignore test_client.py file
 test_client.py
+
+# Ignore static files
+static/
