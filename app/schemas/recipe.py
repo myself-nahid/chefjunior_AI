@@ -46,6 +46,9 @@ class RecipeOut(RecipeBase):
     # Computed field to tell frontend if the heart should be red or empty
     is_favorite: bool = False 
 
+    views_count: int = 0
+    favorites_count: int = 0
+
     class Config:
         from_attributes = True
 

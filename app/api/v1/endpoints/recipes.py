@@ -1,7 +1,7 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-
+from pydantic import BaseModel
 from app.database import get_db
 from app.schemas.recipe import RecipeOut, RecipeCreate, RecipeExploreOut
 from app.crud import crud_recipe
@@ -100,11 +100,20 @@ def read_recipe(
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
     
+    recipe.views_count += 1
+    db.commit() # Save to database
+    db.refresh(recipe) # Refresh to get the new number
+    
     user = db.query(User).filter(User.id == current_user_id).first()
     is_fav = recipe in user.favorite_recipes if user else False
     
     r_out = RecipeOut.model_validate(recipe)
     r_out.is_favorite = is_fav
+    
+    # Ensure the dynamic count is passed to the schema
+    r_out.favorites_count = recipe.favorites_count 
+    r_out.views_count = recipe.views_count
+
     return r_out
 
 
@@ -155,3 +164,17 @@ def delete_recipe(
     if not deleted_recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
     return {"message": "Recipe deleted successfully"}
+
+class ReviewCreate(BaseModel):
+    rating: int
+    comment: str
+
+@router.post("/{recipe_id}/reviews")
+def create_review(
+    recipe_id: int,
+    review: ReviewCreate,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(security.get_current_user)
+):
+    # Logic to save review to database...
+    return {"message": "Review added"}

@@ -71,13 +71,23 @@ def toggle_favorite(db: Session, user_id: int, recipe_id: int):
         return None
 
     if recipe in user.favorite_recipes:
+        # User is removing favorite (Un-like)
         user.favorite_recipes.remove(recipe)
+        
+        # --- FIX: Decrement Count ---
+        if recipe.favorites_count > 0:
+            recipe.favorites_count -= 1
         is_fav = False
     else:
+        # User is adding favorite (Like)
         user.favorite_recipes.append(recipe)
+        
+        # --- FIX: Increment Count ---
+        recipe.favorites_count += 1
         is_fav = True
         
     db.commit()
+    db.refresh(recipe) # Ensure we get the latest count
     return is_fav
 
 def get_user_favorites(db: Session, user_id: int):
