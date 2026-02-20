@@ -20,6 +20,9 @@ from app.schemas.user import (
     VerifyOTPRequest,
     ChangePasswordRequest
 )
+from app.models.user import User
+from app.crud import crud_notification
+from app.schemas.notification import NotificationCreate
 
 # Email Logic Import (Try/Except allows code to run even if you haven't created the email util yet)
 try:
@@ -66,6 +69,18 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
             detail="Email already registered"
         )
     new_user = crud_user.create_user(db, user=user)
+    # 1. Find all Superusers (Admins)
+    admins = db.query(User).filter(User.is_superuser == True).all()
+    
+    # 2. Create a notification for each Admin
+    for admin in admins:
+        notification_data = NotificationCreate(
+            recipient_id=admin.id,
+            title="New user joined",
+            message=f"{new_user.full_name} has joined",
+            type="info"
+        )
+        crud_notification.create_notification(db, notification_data)
     return new_user
 
 
