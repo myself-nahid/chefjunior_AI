@@ -3,7 +3,7 @@ from fastapi import HTTPException
 from app.models.receipe import Recipe, RecipeIngredient
 from app.models.ingredient import Ingredient 
 from app.models.user import User
-from app.schemas.recipe import RecipeCreate
+from app.schemas.recipe import RecipeCreate, RecipeUpdate
 
 def get_recipes(db: Session, skip: int = 0, limit: int = 100, search: str = None):
     query = db.query(Recipe)
@@ -53,6 +53,42 @@ def create_recipe(db: Session, recipe: RecipeCreate):
     db.commit()
     
     # 4. Refresh to load the relationships for Pydantic
+    db.refresh(db_recipe)
+    return db_recipe 
+
+def update_recipe(db: Session, recipe_id: int, recipe_update: RecipeUpdate):
+    # 1. Fetch existing recipe
+    db_recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+    if not db_recipe:
+        return None
+
+    # 2. Update Basic Fields (Title, Description, etc.)
+    update_data = recipe_update.model_dump(exclude_unset=True)
+    
+    # Separate ingredients data from basic data
+    ingredients_data = update_data.pop("ingredients", None)
+
+    for key, value in update_data.items():
+        setattr(db_recipe, key, value)
+
+    # 3. Handle Ingredients Update (The tricky part)
+    if ingredients_data is not None:
+        # A. Clear existing ingredients for this recipe
+        db.query(RecipeIngredient).filter(RecipeIngredient.recipe_id == recipe_id).delete()
+        
+        # B. Add the new list
+        for item in ingredients_data:
+            # Check if ingredient exists (Safety check)
+            ing_exists = db.query(Ingredient).filter(Ingredient.id == item['ingredient_id']).first()
+            if ing_exists:
+                new_relation = RecipeIngredient(
+                    recipe_id=recipe_id,
+                    ingredient_id=item['ingredient_id'],
+                    quantity=item['quantity']
+                )
+                db.add(new_relation)
+
+    db.commit()
     db.refresh(db_recipe)
     return db_recipe
 

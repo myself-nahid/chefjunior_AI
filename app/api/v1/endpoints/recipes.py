@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.database import get_db
-from app.schemas.recipe import RecipeOut, RecipeCreate, RecipeExploreOut
+from app.schemas.recipe import RecipeOut, RecipeCreate, RecipeExploreOut, RecipeUpdate
 from app.crud import crud_recipe
 from app.core import security
 from app.models.user import User
@@ -88,6 +88,29 @@ def create_recipe(
     
     return r_out
 
+# --- UPDATE RECIPE ---
+@router.put("/{recipe_id}", response_model=RecipeOut)
+def update_recipe(
+    recipe_id: int,
+    recipe_data: RecipeUpdate,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(security.get_current_user)
+):
+    """
+    Update a recipe.
+    To update ingredients, send the FULL list of ingredients. 
+    The old list will be replaced by the new one.
+    """
+    # Optional: Add admin check logic here
+    
+    updated_recipe = crud_recipe.update_recipe(db, recipe_id, recipe_data)
+    if not updated_recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+        
+    # Re-validate to ensure output schema logic (is_favorite, etc.) runs
+    # For admin panel, is_favorite is usually false or irrelevant
+    r_out = RecipeOut.model_validate(updated_recipe)
+    return r_out
 
 # 3. GET RECIPE DETAILS
 @router.get("/{recipe_id}", response_model=RecipeOut)

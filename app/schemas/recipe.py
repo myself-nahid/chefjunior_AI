@@ -38,6 +38,24 @@ class Recipe(RecipeBase):
     class Config:
         from_attributes = True
 
+class RecipeUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    difficulty: Optional[str] = None
+    cooking_time: Optional[str] = None
+    servings: Optional[int] = None
+    category: Optional[str] = None
+    image_url: Optional[str] = None
+    video_url: Optional[str] = None
+    
+    # We reuse the IngredientLink class defined inside RecipeCreate in previous steps
+    # If you get an error "IngredientLink not defined", verify previous steps or redefine it here:
+    class IngredientLink(BaseModel):
+        ingredient_id: int
+        quantity: str
+
+    ingredients: Optional[List[IngredientLink]] = None
+    
 class RecipeOut(RecipeBase):
     id: int
     # This ensures we send the ingredients AND their specific quantities
