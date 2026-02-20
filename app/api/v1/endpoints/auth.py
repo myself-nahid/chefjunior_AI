@@ -252,6 +252,14 @@ def change_password(
 
     return {"message": "Password changed successfully"}
 
+@router.post("/logout")
+def logout(current_user_id: int = Depends(security.get_current_user)):
+    """
+    Log out the current user. 
+    In a stateless JWT setup, this primarily serves as a confirmation 
+    and a place to hook in analytics or token blacklisting in the future.
+    """
+    return {"message": "Successfully logged out"}
 
 # ==========================================
 # 8. GET CURRENT USER PROFILE
