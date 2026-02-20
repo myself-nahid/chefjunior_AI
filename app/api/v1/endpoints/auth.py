@@ -162,6 +162,36 @@ def forgot_password(
 
     return {"message": "OTP sent successfully"}
 
+@router.post("/resend-otp")
+def resend_otp(
+    request: ForgotPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Resends a new OTP to the user's email.
+    Invalidates the previous OTP and resets the 10-minute timer.
+    """
+    user = crud_user.get_user_by_email(db, email=request.email)
+    
+    # Security: Always return success to prevent email enumeration
+    if not user:
+        return {"message": "OTP resent successfully"}
+
+    # 1. Generate a NEW 6-digit OTP
+    new_otp = "".join(random.choices(string.digits, k=6))
+    
+    # 2. Reset expiration (10 minutes from NOW)
+    expiration = datetime.utcnow() + timedelta(minutes=10)
+
+    # 3. Update Database
+    user.reset_otp = new_otp
+    user.reset_otp_expires = expiration
+    db.commit()
+
+    # 4. Send the new OTP
+    deliver_otp(user.email, new_otp)
+
+    return {"message": "OTP resent successfully"}
 
 # ==========================================
 # 5. VERIFY OTP
