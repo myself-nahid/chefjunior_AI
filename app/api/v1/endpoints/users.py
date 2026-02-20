@@ -4,12 +4,13 @@ from sqlalchemy.orm import Session
 import shutil
 import os
 import uuid
-
+from typing import Optional
 from app.database import get_db
 from app.schemas.user import User as UserSchema, UserUpdateProfile, UserUpdate
 from app.core import security
 from app.crud import crud_user
 from app.models.game import UserGameProgress
+from app.schemas.user import UserAdminList
 
 router = APIRouter()
 
@@ -105,10 +106,59 @@ async def upload_avatar(
 # 2. DYNAMIC ROUTES (MUST BE AT THE BOTTOM)
 # ==================================================================
 
-@router.get("/", response_model=List[UserSchema])
-def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Get all users (Admin)"""
-    return crud_user.get_users(db, skip=skip, limit=limit)
+# --- 1. GET USER LIST (Search + Pagination) ---
+@router.get("/", response_model=dict)
+def read_users(
+    skip: int = 0,
+    limit: int = 10,
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(security.get_current_user) # Add Admin Check here in production
+):
+    users, total_count = crud_user.get_users(db, skip=skip, limit=limit, search=search)
+
+    # Transform Data for the Table
+    formatted_users = []
+    for user in users:
+        formatted_users.append(
+            UserAdminList(
+                id=user.id,
+                name=user.full_name,
+                email=user.email,
+                recipes_tried=user.recipes_tried, # Ensure this column exists in User model
+                favorites_count=len(user.favorite_recipes), # Calculate length of relationship
+                joined_date=user.joined_at.strftime("%d %b, %Y"), # "6 Jan, 2025"
+                is_active=user.is_active
+            )
+        )
+
+    return {
+        "total": total_count,
+        "page": (skip // limit) + 1,
+        "size": limit,
+        "items": formatted_users
+    }
+
+# --- 2. TOGGLE USER STATUS (The Orange Switch) ---
+@router.patch("/{user_id}/toggle-status")
+def toggle_status(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(security.get_current_user)
+):
+    db_user = crud_user.get_user_by_id(db, user_id=user_id)
+    if not db_user:
+        return {"error": "User not found"}
+    
+    # Flip the boolean
+    db_user.is_active = not db_user.is_active
+    db.commit()
+    
+    return {
+        "id": user_id, 
+        "is_active": db_user.is_active, 
+        "message": "User status updated"
+    }
 
 
 @router.get("/{user_id}", response_model=UserSchema)

@@ -36,6 +36,18 @@ class User(UserBase):
     class Config:
         from_attributes = True
 
+class UserAdminList(BaseModel):
+    id: int
+    name: Optional[str] = "Unknown" # Maps to full_name
+    email: EmailStr
+    recipes_tried: int      # From DB column
+    favorites_count: int    # Calculated field
+    joined_date: str        # Formatted date string
+    is_active: bool         # For the Toggle Switch
+
+    class Config:
+        from_attributes = True
+
 # --- Password Reset Schemas ---
 
 class ForgotPasswordRequest(BaseModel):

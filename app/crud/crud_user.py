@@ -1,3 +1,4 @@
+from operator import or_
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
@@ -25,9 +26,31 @@ def create_user(db: Session, user: UserCreate):
     db.refresh(db_user)
     return db_user
 
-def get_users(db: Session, skip: int = 0, limit: int = 100):
-    """Get all users with pagination"""
-    return db.query(User).offset(skip).limit(limit).all()
+def get_users(
+    db: Session, 
+    skip: int = 0, 
+    limit: int = 10, 
+    search: str = None
+):
+    query = db.query(User)
+
+    # 1. Handle Search (Name OR Email)
+    if search:
+        search_filter = f"%{search}%"
+        query = query.filter(
+            or_(
+                User.full_name.ilike(search_filter),
+                User.email.ilike(search_filter)
+            )
+        )
+    
+    # 2. Get Total Count (For Pagination UI)
+    total = query.count()
+
+    # 3. Apply Pagination and Fetch
+    users = query.offset(skip).limit(limit).all()
+
+    return users, total
 
 def update_user(db: Session, user_id: int, user_update: UserUpdate):
     """Update user information"""
