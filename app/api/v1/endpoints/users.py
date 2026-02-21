@@ -6,17 +6,13 @@ import os
 import uuid
 from typing import Optional
 from app.database import get_db
-from app.schemas.user import User as UserSchema, UserUpdateProfile, UserUpdate
+from app.schemas.user import User as UserSchema, UserUpdateProfile, UserUpdate, AdminProfileUpdate
 from app.core import security
 from app.crud import crud_user
 from app.models.game import UserGameProgress
 from app.schemas.user import UserAdminList
 
 router = APIRouter()
-
-# ==================================================================
-# 1. STATIC ROUTES (MUST BE AT THE TOP)
-# ==================================================================
 
 @router.get("/me", response_model=UserSchema)
 def get_my_profile(
@@ -101,10 +97,37 @@ async def upload_avatar(
     
     return UserSchema.model_validate(db_user)
 
+@router.patch("/me/admin-profile", response_model=UserSchema)
+def update_admin_profile(
+    profile_data: AdminProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(security.get_current_user)
+):
+    """
+    Updates Email, Phone, and Address for the Admin Dashboard.
+    """
+    db_user = crud_user.get_user_by_id(db, user_id=current_user_id)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
 
-# ==================================================================
-# 2. DYNAMIC ROUTES (MUST BE AT THE BOTTOM)
-# ==================================================================
+    # Update fields if provided
+    if profile_data.email:
+        # Check if email is taken by someone else
+        existing_user = crud_user.get_user_by_email(db, email=profile_data.email)
+        if existing_user and existing_user.id != current_user_id:
+            raise HTTPException(status_code=400, detail="Email already in use")
+        db_user.email = profile_data.email
+        
+    if profile_data.phone_number is not None:
+        db_user.phone_number = profile_data.phone_number
+        
+    if profile_data.address is not None:
+        db_user.address = profile_data.address
+
+    db.commit()
+    db.refresh(db_user)
+    
+    return UserSchema.model_validate(db_user)
 
 # --- 1. GET USER LIST (Search + Pagination) ---
 @router.get("/", response_model=dict)

@@ -2,7 +2,6 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 
-# --- Base Schemas ---
 class UserBase(BaseModel):
     email: EmailStr
     full_name: Optional[str] = None
@@ -20,16 +19,19 @@ class UserUpdate(UserBase):
     password: Optional[str] = None
     full_name: Optional[str] = None
 
+class AdminProfileUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    phone_number: Optional[str] = None
+    address: Optional[str] = None
+
 class User(UserBase):
     id: int
-    avatar_url: Optional[str] = None 
-    
-    # Add defaults (= 0 or = None) to prevent 422 Errors
+    avatar_url: Optional[str] = None
+    phone_number: Optional[str] = None
+    address: Optional[str] = None
     recipes_tried: int = 0
     games_played: int = 0
-    joined_at: Optional[datetime] = None 
-
-    # Computed fields
+    joined_at: Optional[datetime] = None
     recipes_completed_count: int = 0 
     games_won_count: int = 0
 
@@ -47,8 +49,6 @@ class UserAdminList(BaseModel):
 
     class Config:
         from_attributes = True
-
-# --- Password Reset Schemas ---
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr

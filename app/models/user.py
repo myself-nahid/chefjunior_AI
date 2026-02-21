@@ -29,6 +29,9 @@ class User(Base):
     games_played = Column(Integer, default=0)
     joined_at = Column(DateTime, default=datetime.utcnow)
 
+    phone_number = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+
     # Password Reset Fields
     reset_otp = Column(String, nullable=True) # Stores the 6-digit code
     reset_otp_expires = Column(DateTime, nullable=True)
@@ -38,6 +41,6 @@ class User(Base):
 
     # Game Progress Relationship
     game_progress = relationship("app.models.game.UserGameProgress", back_populates="user")
-    
+
     # Notifications Relationship
     notifications = relationship("app.models.notification.Notification", back_populates="recipient")
