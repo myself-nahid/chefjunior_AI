@@ -18,7 +18,7 @@ class Game(Base):
     
     difficulty = Column(String) # Easy, Medium, Hard
     xp_reward = Column(Integer, default=10) # Points for winning
-
+    created_at = Column(String) 
     # Relationships
     user_progress = relationship("UserGameProgress", back_populates="game")
 

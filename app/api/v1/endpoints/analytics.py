@@ -31,6 +31,12 @@ def get_dashboard_overview(
     previous_users = total_users - new_users
     user_growth_pct = round((new_users / previous_users * 100), 1) if previous_users > 0 else 100
 
+    previous_recipes = total_recipes - db.query(Recipe).filter(Recipe.created_at >= last_month).count()
+    recipe_growth_pct = round((new_users / previous_recipes * 100), 1) if previous_recipes > 0 else 100
+    
+    previous_games = total_games - db.query(Game).filter(Game.created_at >= last_month).count()
+    game_growth_pct = round((new_users / previous_games * 100), 1) if previous_games > 0 else 100
+
     # 2. RECENT ACTIVITY FEED
     activities = db.query(ActivityLog)\
         .order_by(ActivityLog.timestamp.desc())\
@@ -82,7 +88,9 @@ def get_dashboard_overview(
             "total_recipes": total_recipes,
             "total_users": total_users,
             "total_games": total_games,
-            "user_growth_pct": user_growth_pct
+            "user_growth_pct": user_growth_pct,
+            "recipe_growth_pct": recipe_growth_pct,
+            "game_growth_pct": game_growth_pct
         },
         "recent_activity": recent_activity_data,
         "user_growth_chart": chart_data, # [10, 20, 5, ...]
