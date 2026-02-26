@@ -1,16 +1,18 @@
 from datetime import timedelta, datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic.v1 import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 import random
 import string
 import os
-
+from typing import Annotated
 from app.database import get_db
 from app.core import security
 from app.core.config import settings
 from app.crud import crud_user
 from app.schemas.token import Token
+from app.schemas.auth import LoginRequest
 from app.schemas.user import (
     UserCreate, 
     User as UserSchema, 
@@ -79,15 +81,83 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
         crud_notification.create_notification(db, notification_data)
     return new_user
 
-
+# This system i used in previous but for company policy i used to now json payload instead of this form data.
+'''
 # 2. LOGIN (Swagger UI / Form Data)
+# @router.post("/login", response_model=Token)
+# def login_access_token(
+#     db: Session = Depends(get_db),
+#     form_data: OAuth2PasswordRequestForm = Depends()
+# ):
+#     """
+#     Standard OAuth2 login for Swagger UI documentation.
+#     """
+#     user = crud_user.authenticate_user(db, email=form_data.username, password=form_data.password)
+#     if not user:
+#         raise HTTPException(
+#             status_code=status.HTTP_401_UNAUTHORIZED,
+#             detail="Incorrect email or password",
+#             headers={"WWW-Authenticate": "Bearer"},
+#         )
+    
+#     if not user.is_active:
+#          raise HTTPException(status_code=400, detail="Inactive user")
+
+#     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+#     access_token = security.create_access_token(
+#         subject=user.id, expires_delta=access_token_expires
+#     )
+#     return {"access_token": access_token, "token_type": "bearer", "user_id": user.id, "user_role": "admin" if user.is_superuser else "user"}
+'''
+
+# 2. LOGIN (JSON - For Flutter/React)
 @router.post("/login", response_model=Token)
+def login(
+    # Annotated + Body to strictly define this as JSON Body
+    login_data: Annotated[LoginRequest, Body()],
+    db: Session = Depends(get_db)
+):
+    """
+    Login using JSON payload:
+    {
+      "email": "user@example.com",
+      "password": "secretpassword"
+    }
+    """
+    # Authenticate
+    user = crud_user.authenticate_user(db, email=login_data.email, password=login_data.password)
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+        )
+    
+    if not user.is_active:
+         raise HTTPException(status_code=400, detail="Inactive user")
+
+    # Generate Token
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = security.create_access_token(
+        subject=user.id, expires_delta=access_token_expires
+    )
+    
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer",
+        "user_id": user.id,
+        "user_role": "admin" if user.is_superuser else "user"
+    }
+
+
+# 3. LOGIN (Form Data - For Swagger UI Support)
+@router.post("/login/access-token", response_model=Token)
 def login_access_token(
     db: Session = Depends(get_db),
     form_data: OAuth2PasswordRequestForm = Depends()
 ):
     """
-    Standard OAuth2 login for Swagger UI documentation.
+    OAuth2 compatible token login, required for the Swagger UI 'Authorize' button.
     """
     user = crud_user.authenticate_user(db, email=form_data.username, password=form_data.password)
     if not user:
@@ -96,7 +166,6 @@ def login_access_token(
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
     if not user.is_active:
          raise HTTPException(status_code=400, detail="Inactive user")
 
@@ -104,36 +173,7 @@ def login_access_token(
     access_token = security.create_access_token(
         subject=user.id, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer", "user_id": user.id, "user_role": "admin" if user.is_superuser else "user"}
-
-
-# 3. LOGIN (JSON / Flutter App)
-class LoginRequest(UserCreate):
-    pass 
-
-@router.post("/login-json", response_model=Token)
-def login_json(
-    login_data: LoginRequest,
-    db: Session = Depends(get_db)
-):
-    """
-    JSON-based login endpoint for Mobile Apps.
-    """
-    user = crud_user.authenticate_user(db, email=login_data.email, password=login_data.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-        )
-    
-    if not user.is_active:
-         raise HTTPException(status_code=400, detail="Inactive user")
-
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = security.create_access_token(
-        subject=user.id, expires_delta=access_token_expires
-    )
-    return {"access_token": access_token, "token_type": "bearer", "user_id": user.id, "user_role": "admin" if user.is_superuser else "user"}
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 # 4. FORGOT PASSWORD (OTP Generation)
