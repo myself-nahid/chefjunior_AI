@@ -1,3 +1,4 @@
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
 from fastapi import HTTPException 
 from app.models.receipe import Recipe, RecipeIngredient
@@ -129,3 +130,17 @@ def toggle_favorite(db: Session, user_id: int, recipe_id: int):
 def get_user_favorites(db: Session, user_id: int):
     user = db.query(User).filter(User.id == user_id).first()
     return user.favorite_recipes if user else []
+
+def get_top_recipes(db: Session, skip: int = 0, limit: int = 5):
+    """
+    Get recipes sorted by favorites with Pagination AND Total Count.
+    """
+    query = db.query(Recipe).order_by(desc(Recipe.favorites_count))
+    
+    # 1. Get Total Count (for the UI pagination numbers)
+    total = query.count()
+    
+    # 2. Get the specific page data
+    items = query.offset(skip).limit(limit).all()
+    
+    return items, total

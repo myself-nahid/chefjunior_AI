@@ -78,6 +78,14 @@ class RecipeExploreOut(BaseModel):
     category: Optional[str] = "Fast Food"
     image_url: Optional[str] = None
     is_favorite: bool = False
+    
+    favorites_count: int = 0 
 
     class Config:
         from_attributes = True
+
+class RecipePagination(BaseModel):
+    total: int
+    page: int
+    size: int
+    items: List[RecipeExploreOut]

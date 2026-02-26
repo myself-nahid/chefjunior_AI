@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.database import get_db
-from app.schemas.recipe import RecipeOut, RecipeCreate, RecipeExploreOut, RecipeUpdate
+from app.schemas.recipe import RecipeOut, RecipeCreate, RecipeExploreOut, RecipePagination, RecipeUpdate
 from app.crud import crud_recipe
 from app.core import security
 from app.models.user import User
@@ -69,6 +69,43 @@ def explore_recipes(
         results.append(r_out)
         
     return results
+
+# GET TOP PERFORMING RECIPES (Based on Favorites)
+@router.get("/popular", response_model=RecipePagination) 
+def get_popular_recipes(
+    skip: int = 0,
+    limit: int = 5,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(security.get_current_user)
+):
+    # 1. Fetch Items AND Total Count
+    recipes, total_count = crud_recipe.get_top_recipes(db, skip=skip, limit=limit)
+    
+    # 2. Calculate Favorites logic
+    user = db.query(User).filter(User.id == current_user_id).first()
+    user_fav_ids = [r.id for r in user.favorite_recipes] if user else []
+
+    # 3. Process Items
+    results = []
+    for r in recipes:
+        r_out = RecipeExploreOut(
+            id=r.id,
+            title=r.title,
+            difficulty=r.difficulty,
+            cooking_time=r.cooking_time,
+            # category=r.category,
+            image_url=r.image_url,
+            is_favorite=(r.id in user_fav_ids),
+            favorites_count=r.favorites_count
+        )
+        results.append(r_out)
+        
+    return {
+        "total": total_count,
+        "page": (skip // limit) + 1,
+        "size": limit,
+        "items": results
+    }
 
 # 2. CREATE RECIPE (Restored Endpoint)
 @router.post("/", response_model=RecipeOut)
