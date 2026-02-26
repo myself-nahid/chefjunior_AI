@@ -6,7 +6,6 @@ import random
 import string
 import os
 
-# Database & Security Imports
 from app.database import get_db
 from app.core import security
 from app.core.config import settings
@@ -24,7 +23,7 @@ from app.models.user import User
 from app.crud import crud_notification
 from app.schemas.notification import NotificationCreate
 
-# Email Logic Import (Try/Except allows code to run even if you haven't created the email util yet)
+# Email Logic Import (Try/Except allows code to run even if haven't created the email util yet)
 try:
     from app.core.email_utils import send_otp_email
 except ImportError:
@@ -32,7 +31,7 @@ except ImportError:
 
 router = APIRouter()
 
-# --- HELPER: OTP SENDER ---
+# HELPER: OTP SENDER
 def deliver_otp(email: str, otp: str):
     """
     Attempts to send OTP via Email. 
@@ -53,10 +52,7 @@ def deliver_otp(email: str, otp: str):
         print(f"🔑  OTP CODE: {otp}")
         print(f"="*50 + "\n")
 
-
-# ==========================================
 # 1. SIGN UP
-# ==========================================
 @router.post("/signup", response_model=UserSchema)
 def register_user(user: UserCreate, db: Session = Depends(get_db)):
     """
@@ -84,9 +80,7 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     return new_user
 
 
-# ==========================================
 # 2. LOGIN (Swagger UI / Form Data)
-# ==========================================
 @router.post("/login", response_model=Token)
 def login_access_token(
     db: Session = Depends(get_db),
@@ -110,12 +104,10 @@ def login_access_token(
     access_token = security.create_access_token(
         subject=user.id, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer", "user_id": user.id, "user_role": "admin" if user.is_superuser else "user"}
 
 
-# ==========================================
 # 3. LOGIN (JSON / Flutter App)
-# ==========================================
 class LoginRequest(UserCreate):
     pass 
 
@@ -141,12 +133,10 @@ def login_json(
     access_token = security.create_access_token(
         subject=user.id, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer", "user_id": user.id, "user_role": "admin" if user.is_superuser else "user"}
 
 
-# ==========================================
 # 4. FORGOT PASSWORD (OTP Generation)
-# ==========================================
 @router.post("/forgot-password")
 def forgot_password(
     request: ForgotPasswordRequest,
@@ -208,9 +198,7 @@ def resend_otp(
 
     return {"message": "OTP resent successfully"}
 
-# ==========================================
 # 5. VERIFY OTP
-# ==========================================
 @router.post("/verify-otp")
 def verify_otp(
     request: VerifyOTPRequest,
@@ -234,9 +222,7 @@ def verify_otp(
     return {"message": "OTP verified successfully"}
 
 
-# ==========================================
 # 6. RESET PASSWORD (Unauthenticated flow)
-# ==========================================
 @router.post("/reset-password")
 def reset_password(
     request: ResetPasswordRequest,
@@ -271,9 +257,7 @@ def reset_password(
     return {"message": "Password reset successfully. Please login."}
 
 
-# ==========================================
 # 7. CHANGE PASSWORD (Authenticated flow)
-# ==========================================
 @router.post("/change-password")
 def change_password(
     request: ChangePasswordRequest,
@@ -306,9 +290,7 @@ def logout(current_user_id: int = Depends(security.get_current_user)):
     """
     return {"message": "Successfully logged out"}
 
-# ==========================================
 # 8. GET CURRENT USER PROFILE
-# ==========================================
 @router.get("/me", response_model=UserSchema)
 def read_users_me(
     db: Session = Depends(get_db),
