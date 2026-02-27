@@ -9,7 +9,7 @@ class Ingredient(Base):
     name = Column(String, index=True)
     origin = Column(String, nullable=True)
     type = Column(String, nullable=True)  # Vegetable, Grain, etc.
-    description = Column(Text, nullable=True)
+    history = Column(Text, nullable=True)
     fun_facts = Column(Text, nullable=True)
     image_url = Column(String, nullable=True)
     

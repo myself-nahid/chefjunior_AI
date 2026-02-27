@@ -64,3 +64,6 @@ test_client.py
 
 # Ignore static files
 static/
+
+# Ignore uploaded images
+uploads/

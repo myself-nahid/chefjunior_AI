@@ -5,7 +5,7 @@ class IngredientBase(BaseModel):
     name: str
     origin: Optional[str] = None
     type: Optional[str] = None
-    description: Optional[str] = None
+    history: Optional[str] = None
     fun_facts: Optional[str] = None
     image_url: Optional[str] = None
     # Updated nutrition fields
