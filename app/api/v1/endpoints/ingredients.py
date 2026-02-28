@@ -78,7 +78,9 @@ def update_ingredient(
     """Update an existing ingredient using form data"""
 
     db_ingredient = crud_ingredient.update_ingredient(
-        db, ingredient_id, ingredient
+        db=db,
+        ingredient_id=ingredient_id,
+        ingredient=ingredient
     )
 
     if not db_ingredient:

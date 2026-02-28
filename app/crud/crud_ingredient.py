@@ -19,17 +19,30 @@ def create_ingredient(db: Session, ingredient: IngredientCreate):
     return db_obj
 
 
-def update_ingredient(db: Session, ingredient_id: int, ingredient: IngredientUpdate):
-    db_obj = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
-    if db_obj:
-        update_data = ingredient.model_dump(exclude_unset=True)
-        for key, value in update_data.items():
-            setattr(db_obj, key, value)
-        db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
-    return db_obj
+def update_ingredient(
+    db: Session,
+    ingredient_id: int,
+    ingredient: IngredientUpdate
+):
+    db_obj = db.query(Ingredient).filter(
+        Ingredient.id == ingredient_id
+    ).first()
 
+    if not db_obj:
+        return None
+
+    update_data = ingredient.model_dump(
+        exclude_unset=True,
+        exclude_none=True
+    )
+
+    for key, value in update_data.items():
+        setattr(db_obj, key, value)
+
+    db.commit()
+    db.refresh(db_obj)
+
+    return db_obj
 
 def delete_ingredient(db: Session, ingredient_id: int):
     obj = db.query(Ingredient).get(ingredient_id)
