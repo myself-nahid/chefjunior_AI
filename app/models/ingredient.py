@@ -16,7 +16,7 @@ class Ingredient(Base):
     # Specific Nutrition Fields (from UI)
     protein = Column(String, nullable=True) # e.g., "10g"
     carbohydrates = Column(String, nullable=True)
-    fats = Column(String, nullable=True)
+    # fun_facts = Column(String, nullable=True)
     others = Column(String, nullable=True) # Vitamin B12 etc.
 
     # Relationship back to the association table

@@ -35,7 +35,7 @@ def create_ingredient(
     history: str = Form(...),
     protein: str = Form(...),
     carbohydrates: str = Form(...),
-    fats: str = Form(...),
+    fun_facts: str = Form(...),
     others: str = Form(...),
     image: UploadFile = File(...),
     db: Session = Depends(get_db)
@@ -62,7 +62,7 @@ def create_ingredient(
         history=history,
         protein=protein,
         carbohydrates=carbohydrates,
-        fats=fats,
+        fun_facts=fun_facts,
         others=others,
         image_url=image_url
     )
