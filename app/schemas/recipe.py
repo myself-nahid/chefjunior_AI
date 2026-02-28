@@ -19,6 +19,7 @@ class RecipeBase(BaseModel):
     title: str
     description: Optional[str] = None
     difficulty: str
+    type: Optional[str] = "Fast Food"
     cooking_time: str
     servings: int
     image_url: Optional[str] = None

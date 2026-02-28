@@ -11,6 +11,7 @@ class Recipe(Base):
     title = Column(String, index=True, nullable=False)
     description = Column(Text, nullable=True)
     difficulty = Column(String)  # Easy, Medium, Hard
+    type = Column(String, default="Fast Food") 
     cooking_time = Column(String) # e.g. "2 hrs"
     servings = Column(Integer)
     image_url = Column(String, nullable=True)
