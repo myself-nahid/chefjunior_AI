@@ -10,6 +10,7 @@ from fastapi import Form, File, UploadFile, Depends
 from sqlalchemy.orm import Session
 import shutil
 import os
+import uuid
 
 router = APIRouter()
 
@@ -39,15 +40,20 @@ def create_ingredient(
     image: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
-    """Create ingredient with image upload"""
+    """Create ingredient with image upload (Production Ready)"""
 
     upload_dir = "uploads"
     os.makedirs(upload_dir, exist_ok=True)
 
-    file_path = os.path.join(upload_dir, image.filename)
+    file_extension = image.filename.split(".")[-1]
+    unique_filename = f"{uuid.uuid4()}.{file_extension}"
+
+    file_path = os.path.join(upload_dir, unique_filename)
 
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(image.file, buffer)
+
+    image_url = f"/uploads/{unique_filename}"
 
     ingredient_data = IngredientCreate(
         name=name,
@@ -58,22 +64,27 @@ def create_ingredient(
         carbohydrates=carbohydrates,
         fats=fats,
         others=others,
-        image_url=file_path   
+        image_url=image_url
     )
 
     return crud_ingredient.create_ingredient(db, ingredient=ingredient_data)
 
-
 @router.put("/{ingredient_id}", response_model=Ingredient)
 def update_ingredient(
-    ingredient_id: int, ingredient: IngredientUpdate, db: Session = Depends(get_db)
+    ingredient_id: int,
+    ingredient: IngredientUpdate = Depends(IngredientUpdate.as_form),
+    db: Session = Depends(get_db),
 ):
-    """Update an existing ingredient"""
-    db_ingredient = crud_ingredient.update_ingredient(db, ingredient_id, ingredient)
+    """Update an existing ingredient using form data"""
+
+    db_ingredient = crud_ingredient.update_ingredient(
+        db, ingredient_id, ingredient
+    )
+
     if not db_ingredient:
         raise HTTPException(status_code=404, detail="Ingredient not found")
-    return db_ingredient
 
+    return db_ingredient
 
 @router.delete("/{ingredient_id}")
 def delete_ingredient(ingredient_id: int, db: Session = Depends(get_db)):
