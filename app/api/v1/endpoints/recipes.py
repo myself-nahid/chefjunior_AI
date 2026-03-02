@@ -7,31 +7,31 @@ from app.schemas.recipe import RecipeOut, RecipeCreate, RecipeExploreOut, Recipe
 from app.crud import crud_recipe
 from app.core import security
 from app.models.user import User
-
 router = APIRouter()
 
 # 1. GET ALL RECIPES (Home Page & Search)
-@router.get("/", response_model=List[RecipeOut])
+@router.get("/", response_model=List[dict])
 def read_recipes(
-    skip: int = 0, 
-    limit: int = 100, 
-    q: Optional[str] = None, # Search query (e.g., "Pizza")
+    skip: int = 0,
+    limit: int = 100,
+    q: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user_id: int = Depends(security.get_current_user)
+    current_user_id: int = Depends(security.get_current_user),
 ):
     recipes = crud_recipe.get_recipes(db, skip=skip, limit=limit, search=q)
-    
-    # Check which ones are favorited by the current user
+
     user = db.query(User).filter(User.id == current_user_id).first()
-    user_fav_ids = [r.id for r in user.favorite_recipes] if user else []
+    user_fav_ids = {r.id for r in user.favorite_recipes} if user else set()
 
     results = []
     for r in recipes:
-        # We manually construct the response to inject 'is_favorite'
         r_out = RecipeOut.model_validate(r)
         r_out.is_favorite = r.id in user_fav_ids
-        results.append(r_out)
-        
+
+        results.append(
+            r_out.model_dump(exclude={"ingredients", "is_favorite", "favorites_count", "views_count", "video_url"})
+        )
+
     return results
 
 @router.get("/explore", response_model=List[RecipeExploreOut])
