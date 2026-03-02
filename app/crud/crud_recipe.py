@@ -32,10 +32,12 @@ def create_recipe(db: Session, recipe: RecipeCreate):
         title=recipe.title,
         description=recipe.description,
         difficulty=recipe.difficulty,
-        type=recipe.type,
+        
+        # Map 'category' (Schema) to 'type' (DB) 
+        type=recipe.category, 
+        
         cooking_time=recipe.cooking_time,
         servings=recipe.servings,
-        # category=recipe.category,
         image_url=recipe.image_url,
         video_url=recipe.video_url
     )
@@ -64,16 +66,20 @@ def update_recipe(db: Session, recipe_id: int, recipe_update: RecipeUpdate):
     if not db_recipe:
         return None
 
-    # 2. Update Basic Fields (Title, Description, etc.)
+    # 2. Update Basic Fields
     update_data = recipe_update.model_dump(exclude_unset=True)
     
     # Separate ingredients data from basic data
     ingredients_data = update_data.pop("ingredients", None)
 
+    # Handle field renaming for Update 
+    if "category" in update_data:
+        update_data["type"] = update_data.pop("category")
+
     for key, value in update_data.items():
         setattr(db_recipe, key, value)
 
-    # 3. Handle Ingredients Update (The tricky part)
+    # 3. Handle Ingredients Update
     if ingredients_data is not None:
         # A. Clear existing ingredients for this recipe
         db.query(RecipeIngredient).filter(RecipeIngredient.recipe_id == recipe_id).delete()
@@ -112,7 +118,7 @@ def toggle_favorite(db: Session, user_id: int, recipe_id: int):
         # User is removing favorite (Un-like)
         user.favorite_recipes.remove(recipe)
         
-        # --- FIX: Decrement Count ---
+        # Decrement Count
         if recipe.favorites_count > 0:
             recipe.favorites_count -= 1
         is_fav = False
@@ -120,12 +126,12 @@ def toggle_favorite(db: Session, user_id: int, recipe_id: int):
         # User is adding favorite (Like)
         user.favorite_recipes.append(recipe)
         
-        # --- FIX: Increment Count ---
+        # Increment Count
         recipe.favorites_count += 1
         is_fav = True
         
     db.commit()
-    db.refresh(recipe) # Ensure we get the latest count
+    db.refresh(recipe) 
     return is_fav
 
 def get_user_favorites(db: Session, user_id: int):
@@ -138,7 +144,7 @@ def get_top_recipes(db: Session, skip: int = 0, limit: int = 5):
     """
     query = db.query(Recipe).order_by(desc(Recipe.favorites_count))
     
-    # 1. Get Total Count (for the UI pagination numbers)
+    # 1. Get Total Count
     total = query.count()
     
     # 2. Get the specific page data

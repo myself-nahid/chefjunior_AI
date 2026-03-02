@@ -1,43 +1,32 @@
 from typing import Optional, List
-from pydantic import BaseModel
-from .ingradient import Ingredient as IngredientSchema
+from pydantic import BaseModel, field_validator
 from app.schemas.ingradient import Ingredient
+
+# 1. Create a flattened schema (Ingredient attributes + Quantity)
+class IngredientWithQuantity(Ingredient):
+    quantity: str
 
 class RecipeIngredientBase(BaseModel):
     ingredient_id: int
-    quantity: str # e.g. "100gm"
-
-class RecipeIngredientDetail(BaseModel):
-    """Used when reading a recipe to show full ingredient details"""
-    quantity: str
-    ingredient: Optional[Ingredient] = None 
-
-    class Config:
-        from_attributes = True
+    quantity: str 
 
 class RecipeBase(BaseModel):
     title: str
     description: Optional[str] = None
     difficulty: str
-    type: Optional[str] = "Fast Food"
+    # Fixed typo in your previous code (type -> category to match DB)
+    category: Optional[str] = "Fast Food" 
     cooking_time: str
     servings: int
     image_url: Optional[str] = None
     video_url: Optional[str] = None
 
 class RecipeCreate(RecipeBase):
-    # Receives a list of IDs and Quantities
-    ingredients: List[RecipeIngredientBase] = []
-
-class Recipe(RecipeBase):
-    id: int
-    favorites_count: int
-    views_count: int
-    # Returns the full ingredient object + quantity
-    ingredients: List[RecipeIngredientDetail] = []
-
-    class Config:
-        from_attributes = True
+    class IngredientLink(BaseModel):
+        ingredient_id: int
+        quantity: str
+    
+    ingredients: List[IngredientLink] = []
 
 class RecipeUpdate(BaseModel):
     title: Optional[str] = None
@@ -49,27 +38,40 @@ class RecipeUpdate(BaseModel):
     image_url: Optional[str] = None
     video_url: Optional[str] = None
     
-    # We reuse the IngredientLink class defined inside RecipeCreate in previous steps
-    # If you get an error "IngredientLink not defined", verify previous steps or redefine it here:
     class IngredientLink(BaseModel):
         ingredient_id: int
         quantity: str
 
     ingredients: Optional[List[IngredientLink]] = None
-    
+
 class RecipeOut(RecipeBase):
     id: int
-    # This ensures we send the ingredients AND their specific quantities
-    ingredients: List[RecipeIngredientDetail] = []
+    # Change the list type to use the flattened schema
+    ingredients: List[IngredientWithQuantity] = []
     
-    # Computed field to tell frontend if the heart should be red or empty
     is_favorite: bool = False 
-
     views_count: int = 0
     favorites_count: int = 0
 
+    # Validator to flatten the structure
+    @field_validator('ingredients', mode='before')
+    @classmethod
+    def flatten_ingredients(cls, v):
+        # 'v' is the list of RecipeIngredient association objects from SQL
+        flattened_list = []
+        for link in v:
+            if link.ingredient:
+                # Extract the ingredient data
+                ing_data = link.ingredient.__dict__.copy()
+                # Inject the quantity from the relationship table
+                ing_data['quantity'] = link.quantity
+                flattened_list.append(ing_data)
+        return flattened_list
+
     class Config:
         from_attributes = True
+        
+Recipe = RecipeOut
 
 class RecipeExploreOut(BaseModel):
     id: int
@@ -79,7 +81,6 @@ class RecipeExploreOut(BaseModel):
     category: Optional[str] = "Fast Food"
     image_url: Optional[str] = None
     is_favorite: bool = False
-    
     favorites_count: int = 0 
 
     class Config:

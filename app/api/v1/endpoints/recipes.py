@@ -10,7 +10,7 @@ from app.models.user import User
 router = APIRouter()
 
 # 1. GET ALL RECIPES (Home Page & Search)
-@router.get("/", response_model=List[dict])
+@router.get("/search", response_model=List[dict])
 def read_recipes(
     skip: int = 0,
     limit: int = 100,
