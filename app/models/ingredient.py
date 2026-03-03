@@ -11,6 +11,7 @@ class Ingredient(Base):
     type = Column(String, nullable=True)  # Vegetable, Grain, etc.
     history = Column(Text, nullable=True)
     fun_facts = Column(Text, nullable=True)
+    fats = Column(String, nullable=True) # e.g., "5g"
     image_url = Column(String, nullable=True)
     
     # Specific Nutrition Fields (from UI)

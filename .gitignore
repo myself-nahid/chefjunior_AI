@@ -67,3 +67,38 @@ static/
 
 # Ignore uploaded images
 uploads/
+
+# --- Python & Virtual Env ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# --- Environment Variables (CRITICAL) ---
+# Never commit this file, it has your OpenAI Key and Passwords
+.env
+
+# --- Database ---
+# Don't commit your local database data
+*.db
+*.sqlite3
+*.sqlite
+
+# --- Media & Uploads ---
+# We want to keep the folder structure, but ignore the actual images uploaded during testing
+static/avatars/*
+static/ingredients/*
+uploads/*
+
+# Keep these "gitkeep" files so the folders exist when you clone (Optional)
+!static/avatars/.gitkeep
+!static/ingredients/.gitkeep
+
+# --- IDE Settings ---
+.vscode/
+.idea/
+
+# --- OS Generated Files ---
+.DS_Store
+Thumbs.db

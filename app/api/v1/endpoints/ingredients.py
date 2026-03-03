@@ -1,3 +1,4 @@
+from email.mime import image
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -36,6 +37,7 @@ def create_ingredient(
     protein: str = Form(...),
     carbohydrates: str = Form(...),
     fun_facts: str = Form(...),
+    fats: str = Form(...),
     others: str = Form(...),
     image: UploadFile = File(...),
     db: Session = Depends(get_db)
@@ -63,6 +65,7 @@ def create_ingredient(
         protein=protein,
         carbohydrates=carbohydrates,
         fun_facts=fun_facts,
+        fats=fats,
         others=others,
         image_url=image_url
     )

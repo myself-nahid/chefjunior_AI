@@ -12,6 +12,7 @@ class IngredientBase(BaseModel):
     protein: Optional[str] = None
     carbohydrates: Optional[str] = None
     fun_facts: Optional[str] = None
+    fats: Optional[str] = None
     others: Optional[str] = None
 
 class IngredientCreate(IngredientBase):
@@ -25,6 +26,8 @@ class IngredientUpdate(BaseModel):
     protein: Optional[str] = None
     carbohydrates: Optional[str] = None
     fun_facts: Optional[str] = None
+    fats: Optional[str] = None
+    others: Optional[str] = None
     image_url: Optional[str] = None
 
     @classmethod
@@ -37,6 +40,8 @@ class IngredientUpdate(BaseModel):
         protein: str = Form(None),
         carbohydrates: str = Form(None),
         fun_facts: str = Form(None),
+        fats: str = Form(None),
+        others: str = Form(None),
         image_url: str = Form(None),
     ):
         return cls(
@@ -47,6 +52,8 @@ class IngredientUpdate(BaseModel):
             protein=protein,
             carbohydrates=carbohydrates,
             fun_facts=fun_facts,
+            fats=fats,
+            others=others,
             image_url=image_url,
         )
 
