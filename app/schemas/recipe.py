@@ -15,7 +15,7 @@ class RecipeBase(BaseModel):
     description: Optional[str] = None
     difficulty: str
     # Fixed typo in your previous code (type -> category to match DB)
-    category: Optional[str] = "Fast Food" 
+    category: Optional[str] = "Fast Food"
     cooking_time: str
     servings: int
     image_url: Optional[str] = None
@@ -70,12 +70,14 @@ class RecipeOut(RecipeBase):
 
     class Config:
         from_attributes = True
-        
+
 Recipe = RecipeOut
 
 class RecipeExploreOut(BaseModel):
     id: int
     title: str
+    description: Optional[str] = None
+    servings: int = 1
     difficulty: str
     cooking_time: str
     category: Optional[str] = "Fast Food"

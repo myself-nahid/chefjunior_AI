@@ -84,8 +84,10 @@ def explore_recipes(
         r_out = RecipeExploreOut(
             id=r.id,
             title=r.title,
+            description=r.description,
             difficulty=r.difficulty,
             cooking_time=r.cooking_time,
+            servings=r.servings,
             # category=r.category,
             image_url=r.image_url,
             is_favorite=(r.id in user_fav_ids) 
