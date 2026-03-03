@@ -10,6 +10,30 @@ from app.models.user import User
 router = APIRouter()
 
 # 1. GET ALL RECIPES (Home Page & Search)
+@router.get("/", response_model=List[dict])
+def read_recipes(
+    skip: int = 0,
+    limit: int = 100,
+    q: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(security.get_current_user),
+):
+    recipes = crud_recipe.get_recipes(db, skip=skip, limit=limit, search=q)
+
+    user = db.query(User).filter(User.id == current_user_id).first()
+    user_fav_ids = {r.id for r in user.favorite_recipes} if user else set()
+
+    results = []
+    for r in recipes:
+        r_out = RecipeOut.model_validate(r)
+        r_out.is_favorite = r.id in user_fav_ids
+
+        results.append(
+            r_out.model_dump(exclude={"ingredients", "is_favorite", "favorites_count", "views_count", "video_url"})
+        )
+
+    return results
+
 @router.get("/search", response_model=List[dict])
 def read_recipes(
     skip: int = 0,

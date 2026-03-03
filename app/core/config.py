@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str
     EMAIL_SENDER: Optional[str] = None
     EMAIL_PASSWORD: Optional[str] = None
+    CLOUDINARY_CLOUD_NAME: Optional[str] = None
+    CLOUDINARY_API_KEY: Optional[str] = None
+    CLOUDINARY_API_SECRET: Optional[str] = None
 
     class Config:
         env_file = ".env"

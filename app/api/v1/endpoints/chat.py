@@ -31,7 +31,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     if client_id not in chat_histories:
         chat_histories[client_id] = []
     
-    await manager.send_personal_message("Hello! I am Dwane. Let's cook!", client_id)
+    # await manager.send_personal_message("Hello! I am Dwane. Let's cook!", client_id)
 
     try:
         while True:
