@@ -33,8 +33,8 @@ def create_recipe(db: Session, recipe: RecipeCreate):
         description=recipe.description,
         difficulty=recipe.difficulty,
         
-        # Map 'category' (Schema) to 'type' (DB) 
-        type=recipe.category, 
+        # Map 'type' (Schema) to 'type' (DB) 
+        type=recipe.type, 
         
         cooking_time=recipe.cooking_time,
         servings=recipe.servings,

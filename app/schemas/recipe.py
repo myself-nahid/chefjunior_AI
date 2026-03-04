@@ -15,7 +15,7 @@ class RecipeBase(BaseModel):
     description: Optional[str] = None
     difficulty: str
     # Fixed typo in your previous code (type -> category to match DB)
-    category: Optional[str] = "Fast Food"
+    type : Optional[str] = "Fast Food"
     cooking_time: str
     servings: int
     image_url: Optional[str] = None
