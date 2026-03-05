@@ -89,7 +89,7 @@ async def upload_avatar(
         raise HTTPException(status_code=500, detail="Could not upload image")
 
     # Save URL
-    base_url = "http://127.0.0.1:8000"
+    base_url = "https://1552-103-159-73-129.ngrok-free.app"
     db_user.avatar_url = f"{base_url}/{file_location}"
     
     db.commit()

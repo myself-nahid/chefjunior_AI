@@ -39,23 +39,23 @@ def create_ingredient(
     fun_facts: str = Form(...),
     fats: str = Form(...),
     others: str = Form(...),
-    image: UploadFile = File(...),
+    image: str = Form(...),
     db: Session = Depends(get_db)
 ):
-    """Create ingredient with image upload (Production Ready)"""
+    # """Create ingredient with image upload (Production Ready)"""
 
-    upload_dir = "uploads"
-    os.makedirs(upload_dir, exist_ok=True)
+    # upload_dir = "uploads"
+    # os.makedirs(upload_dir, exist_ok=True)
 
-    file_extension = image.filename.split(".")[-1]
-    unique_filename = f"{uuid.uuid4()}.{file_extension}"
+    # file_extension = image.filename.split(".")[-1]
+    # unique_filename = f"{uuid.uuid4()}.{file_extension}"
 
-    file_path = os.path.join(upload_dir, unique_filename)
+    # file_path = os.path.join(upload_dir, unique_filename)
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(image.file, buffer)
+    # with open(file_path, "wb") as buffer:
+    #     shutil.copyfileobj(image.file, buffer)
 
-    image_url = f"/uploads/{unique_filename}"
+    # image_url = f"/uploads/{unique_filename}"
 
     ingredient_data = IngredientCreate(
         name=name,
@@ -67,7 +67,7 @@ def create_ingredient(
         fun_facts=fun_facts,
         fats=fats,
         others=others,
-        image_url=image_url
+        image_url=image
     )
 
     return crud_ingredient.create_ingredient(db, ingredient=ingredient_data)
