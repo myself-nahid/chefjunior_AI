@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Table, Enum
+from sqlalchemy import Column, Float, Integer, String, Text, ForeignKey, Table, Enum
 from sqlalchemy.orm import relationship
 from app.database import Base
 from datetime import datetime
@@ -20,6 +20,9 @@ class Recipe(Base):
     created_at = Column(String, default=datetime.utcnow().isoformat) # For analytics
     favorites_count = Column(Integer, default=0)
     views_count = Column(Integer, default=0)
+
+    average_rating = Column(Float, default=0.0)
+    total_reviews = Column(Integer, default=0)
 
     # Relationship to RecipeIngredient
     ingredients = relationship("RecipeIngredient", back_populates="recipe", cascade="all, delete-orphan")

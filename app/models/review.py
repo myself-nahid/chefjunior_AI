@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, ForeignKey, UniqueConstraint
 from app.database import Base
 
 class Review(Base):
@@ -7,5 +7,8 @@ class Review(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     recipe_id = Column(Integer, ForeignKey("recipes.id"))
-    rating = Column(Integer) # 1 to 5
-    comment = Column(String, nullable=True)
+    rating = Column(Integer, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "recipe_id", name="unique_user_recipe_review"),
+    )

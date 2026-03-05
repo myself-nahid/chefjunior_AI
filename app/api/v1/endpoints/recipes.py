@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.database import get_db
-from app.schemas.recipe import RecipeOut, RecipeCreate, RecipeExploreOut, RecipePagination, RecipeUpdate
+from app.schemas.recipe import Recipe, RecipeOut, RecipeCreate, RecipeExploreOut, RecipePagination, RecipeUpdate
 from app.crud import crud_recipe
 from app.core import security
 from app.models.user import User
@@ -251,16 +251,85 @@ def delete_recipe(
         raise HTTPException(status_code=404, detail="Recipe not found")
     return {"message": "Recipe deleted successfully"}
 
-class ReviewCreate(BaseModel):
-    rating: int
-    comment: str
+# Add these imports at the top of recipes.py
+from pydantic import BaseModel, Field
+from sqlalchemy import func
+from app.models.review import Review # Import the new model
 
-@router.post("/{recipe_id}/reviews")
-def create_review(
+# NEW SCHEMAS FOR REVIEWS
+class ReviewCreate(BaseModel):
+    # Field(ge=1, le=5) ensures the user can only send numbers from 1 to 5
+    rating: int = Field(..., ge=1, le=5, description="Star rating from 1 to 5")
+
+class RecipeRatingOut(BaseModel):
+    average_rating: float
+    total_reviews: int
+
+from sqlalchemy import func
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from app.models.receipe import Recipe
+
+# POST: ADD / UPDATE REVIEW
+@router.post("/{recipe_id}/reviews", response_model=RecipeRatingOut)
+def submit_recipe_review(
     recipe_id: int,
     review: ReviewCreate,
     db: Session = Depends(get_db),
     current_user_id: int = Depends(security.get_current_user)
 ):
-    # Logic to save review to database...
-    return {"message": "Review added"}
+
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+
+    # Check if this user already rated
+    existing_review = db.query(Review).filter(
+        Review.recipe_id == recipe_id,
+        Review.user_id == current_user_id
+    ).first()
+
+    if existing_review:
+        existing_review.rating = review.rating
+    else:
+        new_review = Review(
+            recipe_id=recipe_id,
+            user_id=current_user_id,
+            rating=review.rating
+        )
+        db.add(new_review)
+
+    db.commit()
+
+    # Calculate rating from ALL USERS
+    avg_rating, total_reviews = db.query(
+        func.avg(Review.rating),
+        func.count(Review.id)
+    ).filter(
+        Review.recipe_id == recipe_id
+    ).first()
+
+    recipe.average_rating = float(avg_rating or 0)
+    recipe.total_reviews = total_reviews or 0
+
+    db.commit()
+    db.refresh(recipe)
+
+    return {
+        "average_rating": round(recipe.average_rating, 1),
+        "total_reviews": recipe.total_reviews
+    }
+
+# GET: FETCH RECIPE RATING
+@router.get("/{recipe_id}/reviews", response_model=RecipeRatingOut)
+def get_recipe_reviews(recipe_id: int, db: Session = Depends(get_db)):
+
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+
+    return {
+        "average_rating": round(recipe.average_rating or 0, 1),
+        "total_reviews": recipe.total_reviews or 0
+    }
