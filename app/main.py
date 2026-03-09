@@ -13,15 +13,19 @@ app = FastAPI(title="ChefJunior API")
 
 origins = [
     "http://localhost:3000",
-    "http://10.10.12.70:3001",   
+    "http://10.10.12.70:3001",  
+    "http://10.10.12.70:3000",
+    "https://next-js-chef-junior.vercel.app",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,  
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # allow_methods=["*"],
+    # allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["*"],  
 )
 
 app.include_router(api_router, prefix="/api/v1")
