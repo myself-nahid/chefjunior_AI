@@ -340,3 +340,16 @@ def read_users_me(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
+# 9. Delete Account (Authenticated)
+@router.delete("/delete-account")
+def delete_account(
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(security.get_current_user)
+):
+    user = crud_user.get_user_by_id(db, user_id=current_user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    crud_user.delete_user(db, user_id=current_user_id)
+    return {"message": "Account deleted successfully"}
