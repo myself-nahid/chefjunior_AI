@@ -36,6 +36,11 @@ class User(Base):
     reset_otp = Column(String, nullable=True) # Stores the 6-digit code
     reset_otp_expires = Column(DateTime, nullable=True)
 
+    # Email Verification Fields
+    email_verification_otp = Column(String, nullable=True) # Stores the 6-digit code
+    email_verification_otp_expires = Column(DateTime, nullable=True)
+    is_email_verified = Column(Boolean, default=False)
+
     # Favorites Relationship
     favorite_recipes = relationship("Recipe", secondary=favorites_table, back_populates="favorited_by")
 

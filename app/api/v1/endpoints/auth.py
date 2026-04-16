@@ -19,7 +19,10 @@ from app.schemas.user import (
     ForgotPasswordRequest, 
     ResetPasswordRequest, 
     VerifyOTPRequest,
-    ChangePasswordRequest
+    ChangePasswordRequest,
+    SendVerificationOTPRequest,
+    VerifyEmailRequest,
+    ResendVerificationOTPRequest
 )
 from app.models.user import User
 from app.crud import crud_notification
@@ -59,6 +62,8 @@ def deliver_otp(email: str, otp: str):
 def register_user(user: UserCreate, db: Session = Depends(get_db)):
     """
     Register a new user.
+    After signup, an email verification OTP is automatically sent.
+    The user must verify their email before accessing the app.
     """
     db_user = crud_user.get_user_by_email(db, email=user.email)
     if db_user:
@@ -67,6 +72,35 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
             detail="Email already registered"
         )
     new_user = crud_user.create_user(db, user=user)
+    
+    # Generate and send email verification OTP
+    verification_otp = "".join(random.choices(string.digits, k=6))
+    otp_expiration = datetime.utcnow() + timedelta(minutes=2)
+    
+    new_user.email_verification_otp = verification_otp
+    new_user.email_verification_otp_expires = otp_expiration
+    new_user.is_email_verified = False  # User must verify email
+    db.commit()
+    
+    # Send verification OTP
+    email_sent = False
+    if send_otp_email:
+        from app.core.email_utils import send_email_verification_otp
+        try:
+            email_sent = send_email_verification_otp(new_user.email, verification_otp)
+        except ImportError:
+            pass
+    
+    # Fallback to Console if email fails
+    if not email_sent:
+        print(f"\n" + "="*50)
+        print(f"⚠️  EMAIL SIMULATION (SMTP not configured or failed)")
+        print(f"📧  New User Registered: {new_user.email}")
+        print(f"📨  To: {new_user.email}")
+        print(f"🔑  VERIFICATION OTP CODE: {verification_otp}")
+        print(f"⏰  Expires in: 2 minutes")
+        print(f"="*50 + "\n")
+    
     # 1. Find all Superusers (Admins)
     admins = db.query(User).filter(User.is_superuser == True).all()
     
@@ -135,6 +169,13 @@ def login(
     
     if not user.is_active:
          raise HTTPException(status_code=400, detail="Inactive user")
+    
+    # Check if email is verified
+    if not user.is_email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email before logging in. Check your inbox for the verification code."
+        )
 
     # Generate Token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -143,7 +184,7 @@ def login(
     )
     
     return {
-        "access_token": access_token, 
+        "access_token": access_token,
         "token_type": "bearer",
         "user_id": user.id,
         "user_role": "admin" if user.is_superuser else "user"
@@ -168,6 +209,13 @@ def login_access_token(
         )
     if not user.is_active:
          raise HTTPException(status_code=400, detail="Inactive user")
+    
+    # Check if email is verified
+    if not user.is_email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email before logging in. Check your inbox for the verification code."
+        )
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = security.create_access_token(
@@ -297,7 +345,156 @@ def reset_password(
     return {"message": "Password reset successfully. Please login."}
 
 
-# 7. CHANGE PASSWORD (Authenticated flow)
+# EMAIL VERIFICATION SYSTEM (2-minute OTP)
+# ==========================================
+
+# 1. SEND EMAIL VERIFICATION OTP
+@router.post("/send-verification-otp")
+def send_verification_otp(
+    request: Annotated[SendVerificationOTPRequest, Body()],
+    db: Session = Depends(get_db)
+):
+    """
+    Sends an email verification OTP to the user's email address.
+    Used during signup to verify email ownership.
+    OTP expires in 2 minutes.
+    """
+    user = crud_user.get_user_by_email(db, email=request.email)
+    
+    # Security: Always return success to prevent email enumeration
+    if not user:
+        return {"message": "If this email exists, a verification OTP has been sent."}
+
+    # Generate 6-digit OTP
+    otp = "".join(random.choices(string.digits, k=6))
+    
+    # Set expiration (2 minutes from now)
+    expiration = datetime.utcnow() + timedelta(minutes=2)
+
+    # Save to DB
+    user.email_verification_otp = otp
+    user.email_verification_otp_expires = expiration
+    db.commit()
+
+    # Send the OTP
+    email_sent = False
+    if send_otp_email:
+        from app.core.email_utils import send_email_verification_otp
+        try:
+            email_sent = send_email_verification_otp(user.email, otp)
+        except ImportError:
+            pass
+    
+    # Fallback to Console
+    if not email_sent:
+        print(f"\n" + "="*50)
+        print(f"⚠️  EMAIL SIMULATION (SMTP not configured or failed)")
+        print(f"📨  To: {user.email}")
+        print(f"🔑  VERIFICATION OTP CODE: {otp}")
+        print(f"⏰  Expires in: 2 minutes")
+        print(f"="*50 + "\n")
+
+    return {"message": "Verification OTP sent successfully"}
+
+# 2. RESEND EMAIL VERIFICATION OTP
+@router.post("/resend-verification-otp")
+def resend_verification_otp(
+    request: Annotated[ResendVerificationOTPRequest, Body()],
+    db: Session = Depends(get_db)
+):
+    """
+    Resends a new email verification OTP to the user's email.
+    Invalidates the previous OTP and resets the 2-minute timer.
+    """
+    user = crud_user.get_user_by_email(db, email=request.email)
+    
+    # Security: Always return success to prevent email enumeration
+    if not user:
+        return {"message": "OTP resent successfully"}
+
+    # 1. Generate a NEW 6-digit OTP
+    new_otp = "".join(random.choices(string.digits, k=6))
+    
+    # 2. Reset expiration (2 minutes from NOW)
+    expiration = datetime.utcnow() + timedelta(minutes=2)
+
+    # 3. Update Database
+    user.email_verification_otp = new_otp
+    user.email_verification_otp_expires = expiration
+    db.commit()
+
+    # 4. Send the new OTP
+    email_sent = False
+    if send_otp_email:
+        from app.core.email_utils import send_email_verification_otp
+        try:
+            email_sent = send_email_verification_otp(user.email, new_otp)
+        except ImportError:
+            pass
+    
+    # Fallback to Console
+    if not email_sent:
+        print(f"\n" + "="*50)
+        print(f"⚠️  EMAIL SIMULATION (SMTP not configured or failed)")
+        print(f"📨  To: {user.email}")
+        print(f"🔑  VERIFICATION OTP CODE: {new_otp}")
+        print(f"⏰  Expires in: 2 minutes")
+        print(f"="*50 + "\n")
+
+    return {"message": "OTP resent successfully"}
+
+# 3. VERIFY EMAIL WITH OTP
+@router.post("/verify-email")
+def verify_email(
+    request: Annotated[VerifyEmailRequest, Body()],
+    db: Session = Depends(get_db)
+):
+    """
+    Verifies the user's email using the OTP code.
+    Once verified, the user can access all features.
+    """
+    user = crud_user.get_user_by_email(db, email=request.email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Check OTP matches
+    if not user.email_verification_otp or user.email_verification_otp != request.otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+
+    # Check expiration
+    if user.email_verification_otp_expires and datetime.utcnow() > user.email_verification_otp_expires:
+        raise HTTPException(status_code=400, detail="OTP has expired")
+
+    # Mark email as verified
+    user.is_email_verified = True
+    user.email_verification_otp = None
+    user.email_verification_otp_expires = None
+    db.commit()
+
+    return {"message": "Email verified successfully. You can now login."}
+
+# 4. CHECK EMAIL VERIFICATION STATUS
+@router.get("/email-verification-status")
+def check_email_verification_status(
+    email: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Check if an email is verified.
+    Useful for frontend to determine if user needs to complete email verification.
+    """
+    user = crud_user.get_user_by_email(db, email=email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "email": user.email,
+        "is_email_verified": user.is_email_verified,
+        "full_name": user.full_name
+    }
+
+
+# CHANGE PASSWORD (Authenticated flow)>
 @router.post("/change-password")
 def change_password(
     request: ChangePasswordRequest,
