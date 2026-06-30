@@ -11,6 +11,7 @@ from app.core import security
 from app.crud import crud_user
 from app.models.game import UserGameProgress
 from app.schemas.user import UserAdminList
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -89,7 +90,7 @@ async def upload_avatar(
         raise HTTPException(status_code=500, detail="Could not upload image")
 
     # Save URL
-    base_url = "https://1552-103-159-73-129.ngrok-free.app"
+    base_url = settings.BASE_URL.rstrip("/")
     db_user.avatar_url = f"{base_url}/{file_location}"
     
     db.commit()

@@ -11,7 +11,7 @@ from app.database import get_db
 from app.core import security
 from app.core.config import settings
 from app.crud import crud_user
-from app.schemas.token import Token
+from app.schemas.token import Token, RefreshTokenRequest 
 from app.schemas.auth import LoginRequest
 from app.schemas.user import (
     UserCreate, 
@@ -27,12 +27,14 @@ from app.schemas.user import (
 from app.models.user import User
 from app.crud import crud_notification
 from app.schemas.notification import NotificationCreate
+from jose import jwt, JWTError
 
 # Email Logic Import (Try/Except allows code to run even if haven't created the email util yet)
 try:
-    from app.core.email_utils import send_otp_email
+    from app.core.email_utils import send_otp_email, send_email_verification_otp
 except ImportError:
     send_otp_email = None
+    send_email_verification_otp = None
 
 router = APIRouter()
 
@@ -57,63 +59,99 @@ def deliver_otp(email: str, otp: str):
         print(f"🔑  OTP CODE: {otp}")
         print(f"="*50 + "\n")
 
-# 1. SIGN UP
-@router.post("/signup", response_model=UserSchema)
-def register_user(user: UserCreate, db: Session = Depends(get_db)):
+# HELPER: VERIFICATION OTP SENDER
+def deliver_verification_otp(email: str, otp: str):
     """
-    Register a new user.
-    After signup, an email verification OTP is automatically sent.
-    The user must verify their email before accessing the app.
+    Attempts to send Verification OTP via Email using the Welcome template. 
     """
-    db_user = crud_user.get_user_by_email(db, email=user.email)
-    if db_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
-    new_user = crud_user.create_user(db, user=user)
-    
-    # Generate and send email verification OTP
-    verification_otp = "".join(random.choices(string.digits, k=6))
-    otp_expiration = datetime.utcnow() + timedelta(minutes=2)
-    
-    new_user.email_verification_otp = verification_otp
-    new_user.email_verification_otp_expires = otp_expiration
-    new_user.is_email_verified = False  # User must verify email
-    db.commit()
-    
-    # Send verification OTP
     email_sent = False
-    if send_otp_email:
-        from app.core.email_utils import send_email_verification_otp
-        try:
-            email_sent = send_email_verification_otp(new_user.email, verification_otp)
-        except ImportError:
-            pass
     
-    # Fallback to Console if email fails
+    if send_email_verification_otp and os.getenv("EMAIL_PASSWORD"):
+        print(f"📧 Attempting to send verification email to {email}...")
+        email_sent = send_email_verification_otp(email, otp)
+    
+    # Fallback to Console (For Development/Testing)
     if not email_sent:
         print(f"\n" + "="*50)
         print(f"⚠️  EMAIL SIMULATION (SMTP not configured or failed)")
-        print(f"📧  New User Registered: {new_user.email}")
-        print(f"📨  To: {new_user.email}")
-        print(f"🔑  VERIFICATION OTP CODE: {verification_otp}")
-        print(f"⏰  Expires in: 2 minutes")
+        print(f"📨  To: {email}")
+        print(f"🔑  VERIFICATION OTP CODE: {otp}")
         print(f"="*50 + "\n")
+
+# 1. SIGN UP (Step 1: Create Inactive User & Send OTP)
+@router.post("/signup")
+def register_user(user: UserCreate, db: Session = Depends(get_db)):
+    """
+    Register a new user. The account will be inactive until the email is verified with an OTP.
+    """
+    db_user = crud_user.get_user_by_email(db, email=user.email)
     
-    # 1. Find all Superusers (Admins)
-    admins = db.query(User).filter(User.is_superuser == True).all()
+    if db_user:
+        if db_user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered and verified."
+            )
+        # If user exists but is NOT active, we just generate a new OTP and resend it
+    else:
+        # Create new user
+        db_user = crud_user.create_user(db, user=user)
+        # Force the user to be inactive initially
+        db_user.is_active = False 
+
+    # Generate 6-digit OTP
+    otp = "".join(random.choices(string.digits, k=6))
+    expiration = datetime.utcnow() + timedelta(minutes=10)
+
+    # Save OTP to database (reusing the reset_otp columns for simplicity)
+    db_user.reset_otp = otp
+    db_user.reset_otp_expires = expiration
+    db.commit()
+
+    # Send the OTP
+    deliver_verification_otp(db_user.email, otp)
+
+    return {
+        "message": "Account created. Please check your email for the verification OTP.",
+        "email": db_user.email
+    }
+
+
+# 2. VERIFY EMAIL (Step 2: Activate the Account)
+@router.post("/verify-email")
+def verify_email(
+    request: VerifyOTPRequest,
+    db: Session = Depends(get_db)
+):
+    user = crud_user.get_user_by_email(db, email=request.email)
     
-    # 2. Create a notification for each Admin
-    for admin in admins:
-        notification_data = NotificationCreate(
-            recipient_id=admin.id,
-            title="New user joined",
-            message=f"{new_user.full_name} has joined",
-            type="info"
-        )
-        crud_notification.create_notification(db, notification_data)
-    return new_user
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if getattr(user, 'is_email_verified', False) and user.is_active:
+        return {"message": "Account is already verified. You can log in."}
+
+    # Check if OTP matches
+    if not user.reset_otp or user.reset_otp != request.otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+
+    # Check if OTP expired
+    if user.reset_otp_expires and datetime.utcnow() > user.reset_otp_expires:
+        raise HTTPException(status_code=400, detail="OTP has expired.")
+
+    # Success! Activate the user AND verify email
+    user.is_active = True
+    user.is_email_verified = True  # <--- THIS WAS THE MISSING LINE!
+    
+    user.reset_otp = None
+    user.reset_otp_expires = None
+    
+    # Forces SQLAlchemy to track the update and save
+    db.add(user)      
+    db.commit()       
+    db.refresh(user)  
+
+    return {"message": "Email verified successfully! You can now log in."}
 
 # This system i used in previous but for company policy i used to now json payload instead of this form data.
 '''
@@ -168,7 +206,7 @@ def login(
         )
     
     if not user.is_active:
-         raise HTTPException(status_code=400, detail="Inactive user")
+         raise HTTPException(status_code=400, detail="User not found")
     
     # Check if email is verified
     if not user.is_email_verified:
@@ -182,9 +220,49 @@ def login(
     access_token = security.create_access_token(
         subject=user.id, expires_delta=access_token_expires
     )
+
+    refresh_token = security.create_refresh_token(subject=user.id)
     
     return {
         "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user_id": user.id,
+        "user_role": "admin" if user.is_superuser else "user"
+    }
+
+@router.post("/refresh", response_model=Token)
+def refresh_access_token(
+    request: Annotated[RefreshTokenRequest, Body()], 
+    db: Session = Depends(get_db)
+):
+    """
+    Takes a valid refresh token and returns a new access token (and new refresh token).
+    """
+    try:
+        # Decode the refresh token
+        payload = jwt.decode(request.refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id: str = payload.get("sub")
+        token_type: str = payload.get("type")
+        
+        if user_id is None or token_type != "refresh":
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
+            
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token. Please log in again.")
+    
+    # Verify User still exists and is active
+    user = crud_user.get_user_by_id(db, user_id=int(user_id))
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or inactive")
+
+    # Generate NEW tokens
+    new_access_token = security.create_access_token(subject=user.id)
+    new_refresh_token = security.create_refresh_token(subject=user.id) # Issue a rotating refresh token
+    
+    return {
+        "access_token": new_access_token,
+        "refresh_token": new_refresh_token,
         "token_type": "bearer",
         "user_id": user.id,
         "user_role": "admin" if user.is_superuser else "user"
@@ -443,35 +521,35 @@ def resend_verification_otp(
 
     return {"message": "OTP resent successfully"}
 
-# 3. VERIFY EMAIL WITH OTP
-@router.post("/verify-email")
-def verify_email(
-    request: Annotated[VerifyEmailRequest, Body()],
-    db: Session = Depends(get_db)
-):
-    """
-    Verifies the user's email using the OTP code.
-    Once verified, the user can access all features.
-    """
-    user = crud_user.get_user_by_email(db, email=request.email)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+# # 3. VERIFY EMAIL WITH OTP
+# @router.post("/verify-email")
+# def verify_email(
+#     request: Annotated[VerifyEmailRequest, Body()],
+#     db: Session = Depends(get_db)
+# ):
+#     """
+#     Verifies the user's email using the OTP code.
+#     Once verified, the user can access all features.
+#     """
+#     user = crud_user.get_user_by_email(db, email=request.email)
+#     if not user:
+#         raise HTTPException(status_code=404, detail="User not found")
 
-    # Check OTP matches
-    if not user.email_verification_otp or user.email_verification_otp != request.otp:
-        raise HTTPException(status_code=400, detail="Invalid OTP")
+#     # Check OTP matches
+#     if not user.email_verification_otp or user.email_verification_otp != request.otp:
+#         raise HTTPException(status_code=400, detail="Invalid OTP")
 
-    # Check expiration
-    if user.email_verification_otp_expires and datetime.utcnow() > user.email_verification_otp_expires:
-        raise HTTPException(status_code=400, detail="OTP has expired")
+#     # Check expiration
+#     if user.email_verification_otp_expires and datetime.utcnow() > user.email_verification_otp_expires:
+#         raise HTTPException(status_code=400, detail="OTP has expired")
 
-    # Mark email as verified
-    user.is_email_verified = True
-    user.email_verification_otp = None
-    user.email_verification_otp_expires = None
-    db.commit()
+#     # Mark email as verified
+#     user.is_email_verified = True
+#     user.email_verification_otp = None
+#     user.email_verification_otp_expires = None
+#     db.commit()
 
-    return {"message": "Email verified successfully. You can now login."}
+#     return {"message": "Email verified successfully. You can now login."}
 
 # 4. CHECK EMAIL VERIFICATION STATUS
 @router.get("/email-verification-status")
