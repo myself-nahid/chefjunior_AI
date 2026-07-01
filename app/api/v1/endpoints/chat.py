@@ -25,6 +25,14 @@ manager = ConnectionManager()
 # Simple in-memory history (Use Redis for production)
 chat_histories: Dict[str, List[dict]] = {}
 
+@router.get("/{client_id}", response_model=List[dict])
+async def get_chat_history(client_id: str):
+    """
+    Retrieves previous messages for a user.
+    This handles the standard HTTP GET request seen in your logs.
+    """
+    return chat_histories.get(client_id, [])
+
 @router.websocket("/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
     await manager.connect(client_id, websocket)
