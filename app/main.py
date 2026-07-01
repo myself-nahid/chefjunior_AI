@@ -17,6 +17,7 @@ origins = [
     "http://10.10.12.70:3000",
     "https://next-js-chef-junior.vercel.app",
     "https://chef-junior.vercel.app",
+    "https://dashboard.thec2capp.tech"
 ]
 
 app.add_middleware(
